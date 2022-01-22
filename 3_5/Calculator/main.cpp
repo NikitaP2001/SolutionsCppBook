@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cstring>
 #include <cstdlib>
+#include <cmath>
 
 enum token_value {
         NAME, NUMBER, END,
@@ -11,10 +12,14 @@ enum token_value {
 };
 token_value curr_tok;
 
-struct name {
+struct name {        
         char *string;
         name *next;
-        double value;
+        union {
+                double (*fptr)(double);
+                double value;
+        };
+        bool isFunc;
 };
 const int TBLSZ = 23;
 name *table[TBLSZ];
@@ -61,13 +66,22 @@ double prim()
                         get_token();
                         return number_value;
                 case NAME:
+                {
                         if (get_token() == ASSIGN) {
                                 name* n = insert(name_string);
                                 get_token();
                                 n->value = expr();
                                 return n->value;
                         }
-                        return look(name_string)->value;
+                        name *var = look(name_string);
+                        if (var->isFunc) {
+                                get_token();
+                                double e = expr();
+                                get_token();
+                                return (*var->fptr)(e);
+                        } else
+                                return var->value;
+                }
                 case MINUS:
                         get_token();
                         return prim();
@@ -187,6 +201,12 @@ inline name* insert(const char *s) { return look(s, 1); }
 
 int main()
 {
+        insert("sqrt")->fptr = &sqrt;
+        look("sqrt")->isFunc = 1;
+        insert("log")->fptr = &log;
+        look("log")->isFunc = 1;
+        insert("sin")->fptr = &sin;
+        look("sin")->isFunc = 1;        
         insert("pi")->value = 3.141592653589;
         insert("e")->value = 2.7182818284;
         while (std::cin) {
