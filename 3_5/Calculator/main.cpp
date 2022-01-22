@@ -141,6 +141,7 @@ token_value get_token()
                 case '5': case '6': case '7': case '8': case '9':
                 case '.':
                 {
+                        read_buf.insert(0, 1, ch);
                         number_value = StringToDouble(read_buf);                                                                     
                         return curr_tok=NUMBER;
                 }
