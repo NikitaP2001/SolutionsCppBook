@@ -149,9 +149,10 @@ token_value get_token()
                         if (isalpha(ch)) {
                                 char *p = name_string;
                                 *p++ = ch;
-                                while (std::cin.get(ch) && isalnum(ch))
+                                while ((ch = read_buf.at(0)) && isalnum(ch)) {                                        
+                                        read_buf = read_buf.substr(1, std::string::npos);
                                         *p++ = ch;
-                                std::cin.putback(ch);
+                                }                                
                                 *p = 0;
                                 return curr_tok=NAME;
                         }
