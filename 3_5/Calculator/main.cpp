@@ -18,11 +18,14 @@ struct name {
         union {
                 double (*fptr)(double);
                 double value;
+                std::string *UserFunc;
         };
         bool isFunc;
+        bool isUserDef;
 };
 const int TBLSZ = 23;
 name *table[TBLSZ];
+std::string read_buf;   // holds current line
 
 token_value get_token();
 double term();
@@ -125,7 +128,6 @@ double term()
 
 token_value get_token()
 {
-        static std::string read_buf;
         char ch;
         if (read_buf.length() == 0) {
                 getline(std::cin, read_buf);
@@ -197,14 +199,20 @@ name *look(const char *p, int ins)
         return nn;
 }
 
-inline name* insert(const char *s) { return look(s, 1); } 
+inline name* insert(const char *s)
+{
+        name *n = look(s, 1);
+        n->isFunc = false;
+        n->isUserDef = false;
+        return n; 
+} 
 
 int main()
 {
         insert("sqrt")->fptr = &sqrt;
-        look("sqrt")->isFunc = 1;
+        look("sqrt")->isFunc = true;
         insert("log")->fptr = &log;
-        look("log")->isFunc = 1;
+        look("log")->isFunc = true;
         insert("sin")->fptr = &sin;
         look("sin")->isFunc = 1;        
         insert("pi")->value = 3.141592653589;
