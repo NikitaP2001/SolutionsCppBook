@@ -3,6 +3,7 @@
 #include <sstream>
 #include <cstring>
 #include <cstdlib>
+#include <vector>
 #include <cmath>
 
 enum token_value {
@@ -23,14 +24,19 @@ struct name {
         bool isFunc;
         bool isUserDef;
 };
-const int TBLSZ = 23;
+
+std::string GetFuncParams(std::string fline);
+double ProcessFunction(std::string finput, std::string arguments);
+
+const int TBLSZ = 100;
 name *table[TBLSZ];
 std::string read_buf;   // holds current line
 
 token_value get_token();
 double term();
 double StringToDouble(std::string &str);
-inline name* insert(const char *s);
+name* insert(const char *s);
+void remove_name(const char *p);
 name *look(const char *, int = 0);
 
 int no_of_errors;
@@ -76,8 +82,28 @@ double prim()
                                 n->value = expr();
                                 return n->value;
                         }
+                        
+                        std::string curr_line = read_buf;
+                        curr_line.insert(0, 1, char(curr_tok));
+                        std::string params = GetFuncParams(curr_line);
+                        if (params.find('$', 0) != std::string::npos) {
+                                name *n = insert(name_string);
+                                n->isFunc = true;
+                                n->isUserDef = true;
+                                n->UserFunc = new std::string(curr_line);                                
+                                
+                                read_buf = "";
+                                return 0;
+                        }
+                        
                         name *var = look(name_string);
-                        if (var->isFunc) {
+                        if (var->isUserDef) {                               
+                                double result = ProcessFunction(*var->UserFunc, params);
+                                
+                                curr_tok = PRINT;
+                                read_buf = "";
+                                return result;
+                        } else if (var->isFunc) {
                                 get_token();
                                 double e = expr();
                                 get_token();
@@ -199,13 +225,140 @@ name *look(const char *p, int ins)
         return nn;
 }
 
-inline name* insert(const char *s)
+name* insert(const char *s)
 {
         name *n = look(s, 1);
         n->isFunc = false;
         n->isUserDef = false;
         return n; 
-} 
+}
+
+void remove_name(const char *p)
+{
+        int ii = 0;
+        const char *pp = p;
+        while (*pp) ii = ii << 1 ^ *pp++;
+        if (ii < 0)
+                ii = -ii;
+        ii %= TBLSZ;
+        for (name *n=table[ii]; n; n=n->next) {
+                if (strcmp(p,n->string) == 0) {
+                        for (int i = 0; i < TBLSZ; i++) {
+                                if (table[i] == n)
+                                        table[i] = n->next;                                                                        
+                        }
+                        delete[] n->string;
+                        if (n->isUserDef)
+                                delete n->UserFunc;
+                        delete n;
+                        return;
+                }
+        }
+}
+
+/* Returns text inside first bracers met in fline, including
+ * bracers themselves 
+ */
+std::string GetFuncParams(std::string fline)
+{        
+        char ch;
+        int LBcount = 0;
+        size_t prevBpos = 0;
+        do {
+                ch = fline.at(0);
+                fline = fline.substr(1, std::string::npos);
+        } while ((ch != '\n') && isspace(ch));
+        
+        if (ch == '(') {
+                LBcount += 1;
+                fline.insert(0, 1, ch);
+        } else
+                return "";
+        
+        while (LBcount != 0) {
+                
+                size_t LBpos = fline.find('(', prevBpos+1);
+                size_t RBpos = fline.find(')', prevBpos+1);
+                if (LBpos == std::string::npos && RBpos == std::string::npos)                     
+                        return "";
+
+                if (RBpos > LBpos) {
+                        LBcount += 1;                                
+                        prevBpos = LBpos;
+                } else {                                
+                        LBcount -= 1;
+                        prevBpos = RBpos;                        
+                }                
+        }        
+        
+        return fline.substr(0, prevBpos + 1);
+}
+
+
+/* Executes function from finput, using string in arguments to
+ * calculate function arguments.
+ * Finput expected to be:
+ *      ($param1,$param2,...) expr
+ * arguments expects to be:
+ *      (arg1, arg2,...)
+ */
+double ProcessFunction(std::string finput, std::string arguments)
+{
+        std::vector<std::string> params;
+        arguments = arguments.substr(arguments.find('(', 0)+1, std::string::npos);
+        bool notLastParam = true;
+        
+        // get each func param and put it in table with 
+        // corresponding value from arguments
+        while (notLastParam) {
+                size_t startParam = finput.find('$', 0);
+                if (startParam == std::string::npos) {
+                        notLastParam = false;
+                        continue;
+                }                        
+                finput = finput.substr(startParam + 1, std::string::npos);
+                
+                size_t endParam = finput.find(',', 0);
+                if (endParam == std::string::npos) {    
+                        endParam = finput.find(')', 0);
+                        notLastParam = false;
+                }
+                size_t endArg = arguments.find(',', 0);
+                if (endArg == std::string::npos) {
+                        endArg = arguments.find(')', 0);
+                        if (notLastParam) {
+                                std::cout << "Error: wrong func args count";
+                                return 0;
+                        }                        
+                }
+                
+                // read parameter                 
+                std::string param = finput.substr(0, endParam);
+                params.push_back(param);
+                finput = finput.substr(endParam+1, std::string::npos);
+                // read argument
+                std::string arg = arguments.substr(0, endArg);
+                arguments = arguments.substr(endArg+1, std::string::npos);
+                
+                // add param to name table
+                name *new_param = insert(&param[0]);
+                read_buf = arg;
+                read_buf.push_back('\n');
+                get_token();
+                new_param->value = expr();
+        }
+        
+        // Execute function body
+        read_buf = finput;
+        read_buf.push_back('\n');
+        get_token();
+        double result = expr();
+        
+        // Delete local parameters
+        for (int i = 0; i < params.size(); i++)
+                remove_name(&params[i][0]);
+        return result;
+}
 
 int main()
 {
