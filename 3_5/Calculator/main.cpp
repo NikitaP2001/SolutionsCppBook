@@ -11,7 +11,14 @@ enum token_value {
         PLUS='+', MINUS='-', MUL='*', DIV='/',
         PRINT=';', ASSIGN='=', LP='(', RP=')'
 };
-token_value curr_tok;
+
+struct symbol {
+        token_value tok;
+        union {
+                double number_value;
+                char *name_string;
+        };
+} sym;
 
 struct name {        
         char *string;
@@ -51,7 +58,7 @@ double expr()
 {
         double left = term();
         for(;;) {
-                switch (curr_tok) {
+                switch (sym.tok) {
                         case PLUS:
                                 get_token();
                                 left += term();
@@ -66,28 +73,26 @@ double expr()
         }
 }
 
-double number_value;
-char name_string[256];
 double prim()
 {
-        switch (curr_tok) {
+        switch (sym.tok) {
                 case NUMBER:
                         get_token();
-                        return number_value;
+                        return sym.number_value;
                 case NAME:
                 {
                         if (get_token() == ASSIGN) {
-                                name* n = insert(name_string);
+                                name* n = insert(sym.name_string);
                                 get_token();
                                 n->value = expr();
                                 return n->value;
                         }
                         
                         std::string curr_line = read_buf;
-                        curr_line.insert(0, 1, char(curr_tok));
+                        curr_line.insert(0, 1, char(sym.tok));
                         std::string params = GetFuncParams(curr_line);
                         if (params.find('$', 0) != std::string::npos) {
-                                name *n = insert(name_string);
+                                name *n = insert(sym.name_string);
                                 n->isFunc = true;
                                 n->isUserDef = true;
                                 n->UserFunc = new std::string(curr_line);                                
@@ -96,11 +101,11 @@ double prim()
                                 return 0;
                         }
                         
-                        name *var = look(name_string);
+                        name *var = look(sym.name_string);
                         if (var->isUserDef) {                               
                                 double result = ProcessFunction(*var->UserFunc, params);
                                 
-                                curr_tok = PRINT;
+                                sym.tok = PRINT;
                                 read_buf = "";
                                 return result;
                         } else if (var->isFunc) {
@@ -118,7 +123,7 @@ double prim()
                         get_token();
                         double e;
                         e = expr();
-                        if (curr_tok != RP)
+                        if (sym.tok != RP)
                                 return error(") expected");
                         get_token();
                         return e;
@@ -133,7 +138,7 @@ double term()
 {
         double left = prim();
         for(;;) {
-                switch (curr_tok) {
+                switch (sym.tok) {
                         case MUL:
                                 get_token();
                                 left *= prim();
@@ -170,7 +175,7 @@ token_value get_token()
         switch (ch) {
                 case ';':
                 case '\n':
-                        return curr_tok=PRINT;
+                        return sym.tok=PRINT;
                 case '*':
                 case '/':
                 case '+':
@@ -178,28 +183,30 @@ token_value get_token()
                 case '(':
                 case ')':
                 case '=':
-                        return curr_tok=token_value(ch);
+                        return sym.tok=token_value(ch);
                 case '0': case '1': case '2': case '3': case '4':
                 case '5': case '6': case '7': case '8': case '9':
                 case '.':
                 {
                         read_buf.insert(0, 1, ch);
-                        number_value = StringToDouble(read_buf);                                                                     
-                        return curr_tok=NUMBER;
+                        if (sym.tok == NAME)
+                                delete[] sym.name_string;
+                        sym.number_value = StringToDouble(read_buf);                                                                     
+                        return sym.tok=NUMBER;
                 }
                 default:
-                        if (isalpha(ch)) {
-                                char *p = name_string;
+                        if (isalpha(ch)) {                                
+                                char *p = sym.name_string = new char[100];
                                 *p++ = ch;
                                 while ((ch = read_buf.at(0)) && isalnum(ch)) {                                        
                                         read_buf = read_buf.substr(1, std::string::npos);
                                         *p++ = ch;
                                 }                                
                                 *p = 0;
-                                return curr_tok=NAME;
+                                return sym.tok=NAME;
                         }
                         error("Invalid lexem");
-                        return curr_tok=PRINT;
+                        return sym.tok=PRINT;
         }
 }
 
@@ -327,7 +334,7 @@ double ProcessFunction(std::string finput, std::string arguments)
                 if (endArg == std::string::npos) {
                         endArg = arguments.find(')', 0);
                         if (notLastParam) {
-                                std::cout << "Error: wrong func args count";
+                                std::cout << "Error: wrong func args count" << std::endl;
                                 return 0;
                         }                        
                 }
@@ -372,8 +379,8 @@ int main()
         insert("e")->value = 2.7182818284;
         while (std::cin) {
                 get_token();
-                if (curr_tok == END) break;
-                if (curr_tok == PRINT) continue;
+                if (sym.tok == END) break;
+                if (sym.tok == PRINT) continue;
                 std::cout << expr() << '\n';
         }
         return no_of_errors;
