@@ -1,19 +1,18 @@
 #include <iostream>
 #include <fstream>
+#include <cstring>
 
 
-char key[] = "SuperSecretKey";
-
-
-void chypter(std::ifstream &fin, std::ofstream &fout)
+void chypter(char *key, std::ifstream &fin, std::ofstream &fout)
 {
 	char ch;
-	bool notEof = true;	
+	bool notEof = true;
+	int keylen = std::strlen(key);	
 			
 	for (int pKey = 0; notEof; pKey++) {	
 		ch = fin.get();
 				
-		if (pKey >= sizeof(key) - 1)
+		if (pKey >= keylen)
 			pKey = 0;
 		ch ^= key[pKey];
 		
@@ -27,13 +26,22 @@ int main(int argc, char *argv[])
 	std::ifstream fin;
 	std::ofstream fout;
 	
-	if (argc != 3)
+	if (argc != 4)
+		return 1;		
+		
+	fin.open(argv[2], std::ios::binary);
+	if (fin.fail()) {
+		std::cout << "error opening file " << argv[2] << std::endl;
 		return 1;
+	}
 	
-	fin.open(argv[1], std::ios::binary);
-	fout.open(argv[2], std::ios::binary);
+	fout.open(argv[3], std::ios::binary);
+	if (fout.fail()) {
+		std::cout << "error opening file " << argv[3] << std::endl;
+		return 1;
+	}
 	
-	chypter(fin, fout);	
+	chypter(argv[1], fin, fout);	
 
 	return 0;
 }
