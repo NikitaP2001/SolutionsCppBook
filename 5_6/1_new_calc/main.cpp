@@ -1,10 +1,12 @@
 #include <iostream>
-#include <string.h>
+#include <string>
 #include <sstream>
 #include <cstring>
 #include <cstdlib>
 #include <vector>
 #include <cmath>
+
+#include "table.hpp"
 
 enum token_value {
         NAME, NUMBER, END,
@@ -20,31 +22,16 @@ struct symbol {
         };
 } sym;
 
-struct name {        
-        char *string;
-        name *next;
-        union {
-                double (*fptr)(double);
-                double value;
-                std::string *UserFunc;
-        };
-        bool isFunc;
-        bool isUserDef;
-};
-
 std::string GetFuncParams(std::string fline);
 double ProcessFunction(std::string finput, std::string arguments);
 
-const int TBLSZ = 100;
-name *table[TBLSZ];
 std::string read_buf;   // holds current line
 
 token_value get_token();
 double term();
 double StringToDouble(std::string &str);
-name* insert(const char *s);
-void remove_name(const char *p);
-name *look(const char *, int = 0);
+
+table NameTable(200);
 
 int no_of_errors;
 double error(const char *s)
@@ -82,7 +69,7 @@ double prim()
                 case NAME:
                 {
                         if (get_token() == ASSIGN) {
-                                name* n = insert(sym.name_string);
+                                name* n = NameTable.insert(sym.name_string);
                                 get_token();
                                 n->value = expr();
                                 return n->value;
@@ -92,7 +79,7 @@ double prim()
                         curr_line.insert(0, 1, char(sym.tok));
                         std::string params = GetFuncParams(curr_line);
                         if (params.find('$', 0) != std::string::npos) {
-                                name *n = insert(sym.name_string);
+                                name *n = NameTable.insert(sym.name_string);
                                 n->isFunc = true;
                                 n->isUserDef = true;
                                 n->UserFunc = new std::string(curr_line);                                
@@ -101,7 +88,7 @@ double prim()
                                 return 0;
                         }
                         
-                        name *var = look(sym.name_string);
+                        name *var = NameTable.look(sym.name_string);
                         if (var->isUserDef) {                               
                                 double result = ProcessFunction(*var->UserFunc, params);
                                 
@@ -210,59 +197,6 @@ token_value get_token()
         }
 }
 
-name *look(const char *p, int ins)
-{
-        int ii = 0;
-        const char *pp = p;
-        while (*pp) ii = ii << 1 ^ *pp++;
-        if (ii < 0)
-                ii = -ii;
-        ii %= TBLSZ;
-        for (name *n=table[ii]; n; n=n->next) {
-                if (strcmp(p,n->string) == 0)
-                        return n;
-        }
-        if (ins == 0) error("No such name found");
-        name *nn = new name;
-        nn->string = new char[strlen(p)+1];
-        strcpy(nn->string, p);
-        nn->value = 1;
-        nn->next = table[ii];
-        table[ii] = nn;
-        return nn;
-}
-
-name* insert(const char *s)
-{
-        name *n = look(s, 1);
-        n->isFunc = false;
-        n->isUserDef = false;
-        return n; 
-}
-
-void remove_name(const char *p)
-{
-        int ii = 0;
-        const char *pp = p;
-        while (*pp) ii = ii << 1 ^ *pp++;
-        if (ii < 0)
-                ii = -ii;
-        ii %= TBLSZ;
-        for (name *n=table[ii]; n; n=n->next) {
-                if (strcmp(p,n->string) == 0) {
-                        for (int i = 0; i < TBLSZ; i++) {
-                                if (table[i] == n)
-                                        table[i] = n->next;                                                                        
-                        }
-                        delete[] n->string;
-                        if (n->isUserDef)
-                                delete n->UserFunc;
-                        delete n;
-                        return;
-                }
-        }
-}
-
 /* Returns text inside first bracers met in fline, including
  * bracers themselves 
  */
@@ -348,7 +282,7 @@ double ProcessFunction(std::string finput, std::string arguments)
                 arguments = arguments.substr(endArg+1, std::string::npos);
                 
                 // add param to name table
-                name *new_param = insert(&param[0]);
+                name *new_param = NameTable.insert(&param[0]);
                 read_buf = arg;
                 read_buf.push_back('\n');
                 get_token();
@@ -363,20 +297,20 @@ double ProcessFunction(std::string finput, std::string arguments)
         
         // Delete local parameters
         for (int i = 0; i < params.size(); i++)
-                remove_name(&params[i][0]);
+                NameTable.remove_name(&params[i][0]);
         return result;
 }
 
 int main()
 {
-        insert("sqrt")->fptr = &sqrt;
-        look("sqrt")->isFunc = true;
-        insert("log")->fptr = &log;
-        look("log")->isFunc = true;
-        insert("sin")->fptr = &sin;
-        look("sin")->isFunc = 1;        
-        insert("pi")->value = 3.141592653589;
-        insert("e")->value = 2.7182818284;
+        NameTable.insert("sqrt")->fptr = &sqrt;
+        NameTable.look("sqrt")->isFunc = true;
+        NameTable.insert("log")->fptr = &log;
+        NameTable.look("log")->isFunc = true;
+        NameTable.insert("sin")->fptr = &sin;
+        NameTable.look("sin")->isFunc = 1;        
+        NameTable.insert("pi")->value = 3.141592653589;
+        NameTable.insert("e")->value = 2.7182818284;
         while (std::cin) {
                 get_token();
                 if (sym.tok == END) break;
