@@ -1,6 +1,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <vector>
+#include <pthread.h>
 #include "screen.hpp"
 
 namespace screen {
@@ -100,7 +102,9 @@ namespace screen {
 			for (auto &prim : primitives) {
 				delete prim;
 			}
-			primitives.erase(primitives.begin(), primitives.end());
+			for (auto &prim : buffer) {
+				delete prim;
+			}
 		}
 
 		void draw()
@@ -110,15 +114,22 @@ namespace screen {
 			}
 		}
 
+		void refresh()
+		{
+			primitives.insert(primitives.end(), buffer.begin(), buffer.end());
+			buffer.erase(buffer.begin(), buffer.end());
+		}
+
 		void add_primitive(primitive const& pr)
 		{
-			primitives.push_back(pr.clone());
+			buffer.push_back(pr.clone());
 		}
 
 		private:
 			Window wnd;
 			Display *dsp;
 			std::vector<primitive*> primitives;
+			std::vector<primitive*> buffer;
 	};
 
 }
@@ -126,6 +137,9 @@ namespace screen {
 Display *screen_display;
 Window screen_window;
 screen::screen *main_screen;
+
+pthread_t draw_thread; 
+bool on_draw_loop;
 
 void put_point(int a, int b)
 {
@@ -151,6 +165,32 @@ static void fix_wnd_size(Window wnd, int xmax, int ymax)
 	XSetWMNormalHints(screen_display, wnd, &hints);
 }
 
+typedef void *(*fptr) (void *);
+void draw_loop()
+{
+	XEvent e;
+	Atom wmDeleteMessage = XInternAtom(screen_display, "WM_DELETE_WINDOW", False);
+       	XSetWMProtocols(screen_display, screen_window, &wmDeleteMessage, 1);
+
+	while (on_draw_loop)  {
+		XNextEvent(screen_display, &e);
+		switch (e.type) {
+			case Expose:
+				main_screen->draw();
+				break;
+			case ClientMessage:
+				if (e.xclient.data.l[0] == wmDeleteMessage) {
+				       	on_draw_loop = false; 
+					XCloseDisplay(screen_display);
+					screen_display = NULL;
+				}
+		       		break;
+			default:
+				break;
+		}
+	}
+}
+
 void screen_init()
 {
 	if (screen_display != NULL)
@@ -173,10 +213,18 @@ void screen_init()
    	XMapWindow(screen_display, screen_window);
 
 	main_screen = new screen::screen(screen_display, screen_window);
+
+	// start drawing thread
+	on_draw_loop = true;
+	pthread_create(&draw_thread, NULL, (fptr)draw_loop, NULL);
 }
 
 void screen_destroy()
 {
+	//stop drawing thread
+	on_draw_loop = false;
+	pthread_join(draw_thread, NULL);
+
 	delete main_screen;
 	if (screen_display != NULL)
 		XCloseDisplay(screen_display);
@@ -184,17 +232,11 @@ void screen_destroy()
 
 void screen_refresh()
 {
-	XEvent e;
-	for (;;) {
-		XNextEvent(screen_display, &e);
-		if (e.type == Expose)
-			main_screen->draw();
-		if (e.type == KeyPress)
-			break;
-	}
+	main_screen->refresh();	
 }
 
 void screen_clear()
 {
+	main_screen->clear();
 }
 
