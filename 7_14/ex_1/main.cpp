@@ -137,7 +137,15 @@ string string::operator+(const string& another)
 
 string &string::operator+=(const string& another)
 {
-	strcat(this->p->s, another.p->s);
+	char temp = new char[strlen(p->s) + strlen(another.p->s) + 1];
+	strcpy(temp, p->s);
+	strcat(temp, another.p->s);
+	if (--p->n == 0) {
+		delete[] p->s;
+		delete p;
+	}
+	p = new srep;
+	p->s = temp;
 	return *this;
 }
 
