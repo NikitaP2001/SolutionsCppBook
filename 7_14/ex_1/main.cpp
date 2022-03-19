@@ -17,6 +17,10 @@ class string {
 	string(const string &);
 	string &operator=(const char*);
 	string &operator=(const string&);
+
+	string operator+(const string&);
+	string &operator+=(const string&);
+
 	~string();
 	char &operator[](int i);
 	friend std::ostream& operator<<(std::ostream &, const string &);
@@ -124,6 +128,19 @@ string& string::operator=(const string &x)
 	return *this;
 }
 
+string string::operator+(const string& another)
+{
+	string str(this->p->s);
+	str += another;
+	return str;
+}
+
+string &string::operator+=(const string& another)
+{
+	strcat(this->p->s, another.p->s);
+	return *this;
+}
+
 std::ostream& operator<<(std::ostream &s, const string &x)
 {
 	return s << x.p->s << " [" << x.p->n << "]" << std::endl;	
@@ -155,12 +172,13 @@ char& string::operator[](int i)
 
 int main()
 {
-	string str;
-	while (std::cin) {
-		std::cin >> str;
-		std::cout << "Range-based for" << std::endl;
-		for (auto c : str)
-			std::cout << c;
-		std::cout << std::endl;
-	}
+	string str = "string1 ";
+	string str2 = "string2 ";
+	string str3 = "string3 ";
+	string str4 = str + str2 + str3;
+	std::cout << "str4: " << str4 << std::endl
+		<< "str: " << str << std::endl
+		<< "str2: " << str2 << std::endl
+		<< "str3: " << str3;
+	exit(0);
 }
