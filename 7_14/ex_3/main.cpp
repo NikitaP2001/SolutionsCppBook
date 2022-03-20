@@ -88,12 +88,10 @@ string& string::operator=(const char *s)
 
 string& string::operator=(const string &x)
 {
-	x.p->n++;
-	if (--p->n == 0) {
-		delete[] p->s;
-		delete p;
-	}
-	p = x.p;
+	int len = (end - beg > x.end - x.beg) ?
+		x.end - x.beg + 1 : end - beg + 1;
+	strncpy(&p->s[beg], &x.p->s[x.beg], len);
+
 	return *this;
 }
 
@@ -175,9 +173,10 @@ char& string::operator[](int i)
 int main()
 {
 	string str = "One two three";
-	str(4, 6) = "three";
+	string str1 = "five";
+	str(4, 6) = str1;
 	std::cout << str << std::endl;
-	str += " five";
+	str += " six";
 	std::cout << str << std::endl;
 	exit(0);
 }
